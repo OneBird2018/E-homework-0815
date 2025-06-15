@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>任务管理后台（可视化）</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <style>
+    body { background: #18181c; color: #fff; font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif; }
+    .container { max-width: 800px; margin: 40px auto; background: #23232b; border-radius: 16px; padding: 36px 32px; box-shadow: 0 4px 32px 0 #000a; }
+    h2 { margin-top: 0; letter-spacing: 2px; }
+    .task-card { background: #23232b; border-radius: 12px; box-shadow: 0 2px 12px #0004; margin-bottom: 24px; padding: 18px 18px 12px 18px; }
+    .task-title { font-size: 1.15rem; font-weight: bold; color: #ffd86b; }
+    .subtask-title { font-size: 1rem; color: #bdbdbd; }
+    .divider { border-top: 1px solid #444; margin: 24px 0; }
+    .form-control, .form-control:focus { background: #222; color: #fff; border: 1px solid #444; }
+    .btn-primary { background: #ffd86b; color: #23232b; border: none; }
+    .btn-primary:hover { background: #ffb300; }
+    .btn-danger { background: #e57373; border: none; }
+    .btn-danger:hover { background: #c62828; }
+    .btn-outline-light { border: 1px solid #ffd86b; color: #ffd86b; }
+    .btn-outline-light:hover { background: #ffd86b; color: #23232b; }
+    .subtask-row { margin-left: 32px; margin-bottom: 8px; }
+    @media (max-width: 600px) { .container { padding: 12px 2vw; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 class="mb-4">任务管理后台 <span style="font-size:1rem;color:#ffd86b;">（可视化）</span></h2>
+    <div id="lastSaved" style="color:#ffd86b;font-size:1rem;margin-bottom:18px;">最后保存时间：--</div>
+    <form class="row g-2 align-items-center mb-4" id="addTaskForm">
+      <div class="col-auto flex-grow-1">
+        <input id="newTaskTitle" class="form-control" placeholder="新任务名称" required>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">+ 新建任务</button>
+      </div>
+    </form>
+    <div id="tasks"></div>
+    <!-- 保存按钮 -->
+    <button id="saveBtn" class="btn btn-success mb-3">保存</button>
+  </div>
+  <script>
+    const API = '/api/tasks';
+    async function fetchTasks() {
+      const res = await fetch(API);
+      return await res.json();
+    }
+    async function fetchLastSaved() {
+      const res = await fetch('/api/lastSaved');
+      const data = await res.json();
+      document.getElementById('lastSaved').textContent = '最后保存时间：' + (data.lastSaved ? new Date(data.lastSaved).toLocaleString() : '--');
+    }
+    async function render() {
+      const tasks = await fetchTasks();
+      const box = document.getElementById('tasks');
+      box.innerHTML = '';
+      tasks.forEach(task => {
+        const card = document.createElement('div');
+        card.className = 'task-card';
+        card.innerHTML = `
+          <div class="d-flex align-items-center mb-2">
+            <span class="task-title flex-grow-1">任务：</span>
+            <button class="btn btn-danger btn-sm ms-2" onclick="deleteTask(${task.id})">删除</button>
+          </div>
+          <div class="input-group mb-2">
+            <input class="form-control" value="${task.title}" onchange="updateTask(${task.id}, this.value)">
+          </div>
+          <form class='row g-2 align-items-center mb-2' onsubmit='addSubtask(event,${task.id})'>
+            <div class="col flex-grow-1">
+              <input class="form-control" placeholder='新子任务名称' id='newSubtask${task.id}' required>
+            </div>
+            <div class="col-auto">
+              <button type='submit' class="btn btn-outline-light btn-sm">+子任务</button>
+            </div>
+          </form>
+          <div class='actions'>
+            ${task.subtasks.map(sub => `
+              <div class='row subtask-row align-items-center'>
+                <div class="col-auto subtask-title">子任务：</div>
+                <div class="col flex-grow-1">
+                  <input class="form-control form-control-sm" value="${sub.title}" onchange="updateSubtask(${task.id},${sub.id},this.value)">
+                </div>
+                <div class="col-auto">
+                  <button class="btn btn-danger btn-sm" onclick="deleteSubtask(${task.id},${sub.id})">删除</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        box.appendChild(card);
+      });
+      fetchLastSaved();
+    }
+    document.getElementById('addTaskForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const title = document.getElementById('newTaskTitle').value.trim();
+      if (!title) return;
+      await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+      document.getElementById('newTaskTitle').value = '';
+      render();
+    }
+    window.addSubtask = async function(e, taskId) {
+      e.preventDefault();
+      const input = document.getElementById('newSubtask'+taskId);
+      const title = input.value.trim();
+      if (!title) return;
+      await fetch(`${API}/${taskId}/subtasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+      input.value = '';
+      render();
+    }
+    window.updateTask = async function(id, title) {
+      await fetch(`${API}/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+      render();
+    }
+    window.deleteTask = async function(id) {
+      if (!confirm('确定删除该任务？')) return;
+      await fetch(`${API}/${id}`, { method: 'DELETE' });
+      render();
+    }
+    window.updateSubtask = async function(taskId, subId, title) {
+      await fetch(`${API}/${taskId}/subtasks/${subId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+      render();
+    }
+    window.deleteSubtask = async function(taskId, subId) {
+      if (!confirm('确定删除该子任务？')) return;
+      await fetch(`${API}/${taskId}/subtasks/${subId}`, { method: 'DELETE' });
+      render();
+    }
+    // 保存按钮点击事件
+    document.getElementById('saveBtn').onclick = async function() {
+      const res = await fetch('/api/save', { method: 'POST' });
+      const data = await res.json();
+      fetchLastSaved();
+      alert('保存成功！');
+    };
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>简约黑色任务清单</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #18181c;
+      color: #fff;
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+      overflow: hidden;
+    }
+    .splash {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #222;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: splashOut 1.2s cubic-bezier(.4,0,.2,1) forwards;
+    }
+    .splash-circle {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3a3a4a 60%, #1e1e2e 100%);
+      box-shadow: 0 0 60px 20px #3a3a4a;
+      animation: splashCircle 1.2s cubic-bezier(.4,0,.2,1) forwards;
+    }
+    @keyframes splashCircle {
+      0% { transform: scale(1); opacity: 1; }
+      80% { transform: scale(12); opacity: 0.7; }
+      100% { transform: scale(30); opacity: 0; }
+    }
+    @keyframes splashOut {
+      0% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { opacity: 0; pointer-events: none; }
+    }
+    .center-container {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 95vw;
+      max-width: 420px;
+      min-width: 320px;
+      z-index: 1;
+    }
+    .task-card {
+      background: rgba(30, 30, 40, 0.98);
+      border-radius: 18px;
+      box-shadow: 0 4px 32px 0 #000a;
+      padding: 32px 24px 18px 24px;
+      min-height: 320px;
+      max-height: 80vh;
+      overflow-y: auto;
+      transition: box-shadow 0.2s;
+      position: relative;
+    }
+    .task-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 18px;
+      letter-spacing: 1px;
+    }
+    .task-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .task-item {
+      margin-bottom: 18px;
+    }
+    .task-main {
+      font-size: 1.08rem;
+      font-weight: 500;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+    }
+    .subtask-list {
+      list-style: none;
+      padding-left: 24px;
+      margin: 0;
+    }
+    .subtask-item {
+      font-size: 0.98rem;
+      color: #bdbdbd;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+    }
+    @media (max-width: 500px) {
+      .center-container { max-width: 98vw; min-width: 0; }
+      .task-card { padding: 18px 6vw 12px 6vw; }
+    }
+  </style>
+</head>
+<body>
+  <div class="splash" id="splash">
+    <div class="splash-circle"></div>
+  </div>
+  <div class="center-container">
+    <div style="text-align:center;margin-bottom:18px;">
+      <img src="media_result_20250615_58a4229b-b358-478d-8ca4-b7c69fdee401.png" alt="校徽" style="width:110px;max-width:30vw;vertical-align:middle;display:block;margin:0 auto 8px auto;">
+      <div style="font-size: 1.5em; font-weight: bold; color:#fff;">浙江二中八（15）</div>
+    </div>
+    <div class="task-card">
+      <div class="task-title" id="taskTitle">作业任务清单</div>
+      <div style="font-size:0.85rem;color:#fff;margin-bottom:8px;" id="lastSaved">最后修改时间：--</div>
+      <ul class="task-list" id="taskList"></ul>
+    </div>
+  </div>
+  <a href="#" style="position:fixed;right:24px;bottom:48px;font-weight:bold;color:#fff;font-size:1rem;text-decoration:none;z-index:10;">往期作业</a>
+  <footer style="position:fixed;left:0;right:0;bottom:0;padding:8px 0;text-align:center;background:rgba(24,24,28,0.95);color:#aaa;font-size:0.98em;z-index:9;letter-spacing:1px;">
+    © 云烨制作 |
+    <a href="https://expressjs.com/" target="_blank" style="color:#aaa;text-decoration:underline;">Express驱动</a>
+    |
+    <a href="https://yunyeblog.asia/" style="color:#aaa;text-decoration:underline;">联系我们</a>
+    |
+    <a href="https://yunyeblog.asia/" style="color:#aaa;text-decoration:underline;">免责声明</a>
+  </footer>
+  <script>
+    // 后端 API 地址
+    const API = 'http://localhost:3000/api/tasks';
+
+    // 获取所有任务并渲染
+    async function fetchAndRenderTasks() {
+      const res = await fetch(API);
+      const tasks = await res.json();
+      renderTasks(tasks);
+      fetchLastSaved();
+    }
+
+    // 渲染任务和子任务
+    function renderTasks(tasks) {
+      const list = document.getElementById('taskList');
+      list.innerHTML = '';
+      tasks.forEach(task => {
+        const li = document.createElement('li');
+        li.className = 'task-item';
+        li.innerHTML = `
+          <div class="task-main">
+            <input type="text" value="${task.title}" style="width:60%;background:#222;color:#fff;border:none;border-radius:4px;padding:2px 6px;" onchange="updateTask(${task.id}, this.value)">
+            <button onclick="deleteTask(${task.id})" style="margin-left:8px;">删除</button>
+            <button onclick="addSubtask(${task.id})" style="margin-left:8px;">+子任务</button>
+          </div>
+          <ul class="subtask-list">
+            ${task.subtasks.map(sub => `
+              <li class="subtask-item">
+                <input type="text" value="${sub.title}" style="width:55%;background:#222;color:#bdbdbd;border:none;border-radius:4px;padding:2px 6px;" onchange="updateSubtask(${task.id},${sub.id},this.value)">
+                <button onclick="deleteSubtask(${task.id},${sub.id})" style="margin-left:8px;">删除</button>
+              </li>
+            `).join('')}
+          </ul>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    // 获取最后保存时间
+    async function fetchLastSaved() {
+      const res = await fetch('http://localhost:3000/api/lastSaved');
+      const data = await res.json();
+      document.getElementById('lastSaved').textContent = '最后保存时间：' + (data.lastSaved ? new Date(data.lastSaved).toLocaleString() : '--');
+    }
+
+    // 新建任务
+    document.getElementById('addTaskBtn').onclick = async function() {
+      const title = prompt('请输入任务名称');
+      if (!title) return;
+      await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      fetchAndRenderTasks();
+    };
+
+    // 修改任务
+    window.updateTask = async function(id, title) {
+      await fetch(`${API}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      fetchAndRenderTasks();
+    };
+    // 删除任务
+    window.deleteTask = async function(id) {
+      if (!confirm('确定删除该任务？')) return;
+      await fetch(`${API}/${id}`, { method: 'DELETE' });
+      fetchAndRenderTasks();
+    };
+    // 新增子任务
+    window.addSubtask = async function(taskId) {
+      const title = prompt('请输入子任务名称');
+      if (!title) return;
+      await fetch(`${API}/${taskId}/subtasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      fetchAndRenderTasks();
+    };
+    // 修改子任务
+    window.updateSubtask = async function(taskId, subId, title) {
+      await fetch(`${API}/${taskId}/subtasks/${subId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      fetchAndRenderTasks();
+    };
+    // 删除子任务
+    window.deleteSubtask = async function(taskId, subId) {
+      if (!confirm('确定删除该子任务？')) return;
+      await fetch(`${API}/${taskId}/subtasks/${subId}`, { method: 'DELETE' });
+      fetchAndRenderTasks();
+    };
+
+    // 页面加载时渲染
+    fetchAndRenderTasks();
+    // 溅出动画结束后隐藏
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        document.getElementById('splash').style.display = 'none';
+        document.body.style.overflow = 'auto';
+      }, 1200);
+    });
+  </script>
+</body>
+</html>
